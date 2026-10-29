@@ -60,3 +60,13 @@ def cross_axis_back(y2, m2, t):
 
     return t - (y2 / m2)
 
+def rms_spot(z, h, R, n, t):
+    """rms spot size (mm) of rays through a plano-convex lens, measured at a sensor at z
+
+    z: sensor position (mm), h: array of ray heights (mm)
+    R: front radius (mm), n: refractive index, t: thickness (mm)
+    """
+
+    y2, m2 = trace_lens(h, R, n, t)
+    y = y2 + m2 * (z - t)
+    return np.sqrt(np.mean(y ** 2))
