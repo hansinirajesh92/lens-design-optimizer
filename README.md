@@ -6,8 +6,8 @@ designing a lens means choosing the parameters that control this: how curved and
 
 ## the plan
 
-1. simulate: trace rays of light through curved glass using snell's law
-2. measure: turn the blur into one number, the spot size
+1. simulate: trace rays of light through curved glass using snell's law (done)
+2. measure: turn the blur into one number, the rms spot size (done)
 3. optimize: adjust the lens shape using derivatives (gradient descent)
 4. tolerance: simulate thousands of slightly imperfect lenses and see how many still come out sharp (monte carlo)
 5. source: choose from a catalog of real optical glasses
@@ -15,7 +15,9 @@ designing a lens means choosing the parameters that control this: how curved and
 
 ## status
 
-step 1 works for a single spherical surface. rays near the axis focus within 0.05% of the textbook focal length, and rays near the edge focus early, which is spherical aberration coming straight out of the geometry. a full lens (front and back surface) is in progress.
+steps 1 and 2 work. the ray tracer follows light through a plano-convex lens (curved front, flat back) with exact snell's law at both surfaces. rays near the axis focus where the lensmaker's equation predicts (51.67 mm for r = 25 mm, n = 1.5, t = 5 mm), and rays near the edge focus early, which is spherical aberration coming straight out of the geometry.
+
+because of that aberration, the sharpest place for the sensor isn't the textbook focus. scanning 151 sensor positions with 1001 rays, the best focus is at 50.2 mm with an rms spot size of 0.077 mm, about 2.5x sharper than at the textbook focus (0.19 mm).
 
 ## running it
 
@@ -28,15 +30,15 @@ pip install -r requirements.txt
 ```
 
 ```python
-from lens.raytrace import crossing
+from lens.raytrace import trace_lens, cross_axis_back
 
-crossing(6, 25, 1.0, 1.5)   # ray at height 6 mm, surface radius 25 mm, air into glass
-# 74.03 mm (the textbook focus for near-axis rays is 75 mm)
+y2, m2 = trace_lens(6, 25, 1.5, 5)   # ray at 6 mm through a lens: r = 25 mm, n = 1.5, t = 5 mm
+cross_axis_back(y2, m2, 5)           # 50.83 mm
 ```
 
 ## layout
 
 ```
 lens/raytrace.py    ray tracing functions
-notebooks/          experiments and plots
+notebooks/          experiments and plots, one per step
 ```
