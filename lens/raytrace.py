@@ -70,3 +70,98 @@ def rms_spot(z, h, R, n, t):
     y2, m2 = trace_lens(h, R, n, t)
     y = y2 + m2 * (z - t)
     return np.sqrt(np.mean(y ** 2))
+
+def sag(y, R):
+    """how far a spherical surface sits from flat at height y (mm)
+
+    R: radius (mm). R > 0 means the center is to the right, R < 0 to the left,
+    np.inf means flat (sag is 0 everywhere). works on a number or a numpy array
+    """
+
+    if np.isinf(R):
+        return 0 * y
+    return R - np.sign(R) * np.sqrt(R ** 2 - y ** 2)
+
+
+def normal_angle(y, R):
+    """angle of the surface normal at height y, measured from the +z direction (radians)
+
+    the normal points along the radius, through the center. flat surfaces give 0
+    """
+
+    if np.isinf(R):
+        return 0 * y
+    return - np.arcsin(y / R)
+
+
+def refract_at(u, y, R, n1, n2):
+    """new angle of a ray after snell's law at a spherical surface (radians, from +z)
+
+    u: ray angle before, y: height where it hits (mm), R: surface radius (mm)
+    n1: index before the surface, n2: index after
+    works for any ray (flat or tilted) and any surface (curved or flat)
+    """
+
+    phi = normal_angle(y, R)
+    theta2 = np.arcsin(n1 * np.sin(u - phi) / n2)
+    return phi + theta2
+
+
+def hit_surface(z0, y0, u, z_v, R):
+    """where a ray meets a surface, found by guess and correct (z and y, in mm)
+
+    (z0, y0): a point the ray passes through, u: its angle (radians)
+    z_v: the surface's vertex position (mm), R: its radius (mm)
+    starts by guessing the vertex, then moves to the surface 5 times
+    """
+
+    z = z_v
+    for i in range(5):
+        y = y0 + np.tan(u) * (z - z0)
+        z = z_v + sag(y, R)
+    y = y0 + np.tan(u) * (z - z0)
+    return z, y
+
+
+def trace(h, surfaces):
+    """trace flat rays at heights h through a list of surfaces, in order
+
+    surfaces: list of (z_v, R, n_after) for each surface the light meets
+    returns where each ray leaves the last surface (z, y in mm) and its angle u (radians)
+    """
+
+    h = np.asarray(h, dtype = float)
+    z = np.full_like(h, -20.0)
+    y = h.copy()
+    u = 0 * h
+    n1 = 1.0
+    for z_v, R, n2 in surfaces:
+        z, y = hit_surface(z, y, u, z_v, R)
+        u = refract_at(u, y, R, n1, n2)
+        n1 = n2
+    return z, y, u
+
+
+def cross(h, surfaces):
+    """where rays at heights h cross the optical axis after the lens (z, in mm)"""
+
+    z, y, u = trace(h, surfaces)
+    return z - y / np.tan(u)
+
+
+def best_spot(surfaces, rays = np.linspace(-10, 10, 1001)):
+    """find the sharpest sensor position for a lens by trying 501 positions from 35 to 60 mm
+
+    rays: ray heights to trace (mm), 1001 rays from -10 to 10 unless given
+    returns the best sensor position (mm) and its rms spot size (mm)
+    """
+
+    z_last, y, u = trace(rays, surfaces)
+    sensors = np.linspace(35, 60, 501)
+    spots = []
+    for z in sensors:
+        y_sensor = y + np.tan(u) * (z - z_last)
+        spots.append(np.sqrt(np.mean(y_sensor ** 2)))
+    spots = np.array(spots)
+    best = np.argmin(spots)
+    return sensors[best], spots[best]
