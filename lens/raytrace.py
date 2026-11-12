@@ -165,3 +165,14 @@ def best_spot(surfaces, rays = np.linspace(-10, 10, 1001)):
     spots = np.array(spots)
     best = np.argmin(spots)
     return sensors[best], spots[best]
+
+def spot_at(surfaces, z_sensor, rays = np.linspace(-10, 10, 1001)):
+    """rms spot size (mm) of a lens at one fixed sensor position
+
+    surfaces: list of (z_v, R, n_after), z_sensor: sensor position (mm)
+    rays: ray heights to trace (mm), 1001 rays from -10 to 10 unless given as input
+    """
+
+    z_last, y, u = trace(rays, surfaces)
+    y_sensor = y + np.tan(u) * (z_sensor - z_last)
+    return np.sqrt(np.mean(y_sensor ** 2))
