@@ -123,18 +123,19 @@ def hit_surface(z0, y0, u, z_v, R):
     return z, y
 
 
-def trace(h, surfaces, angle = 0.0):
-    """trace parallel rays at heights h through a list of surfaces, in order
+def trace(h, surfaces, angle = 0.0, z_stop = 0.0):
+    """trace parallel rays through a list of surfaces, in order
 
     surfaces: list of (z_v, R, n_after) for each surface the light meets
     angle: field angle of the incoming rays (radians), 0 means straight ahead
-    h: where each ray crosses z = 0 (mm), so the bundle always hits the lens
+    z_stop: where the aperture stop (the opening) sits (mm), 0 means at the lens
+    h: where each ray crosses the stop (mm)
     returns where each ray leaves the last surface (z, y in mm) and its angle u (radians)
     """
 
     h = np.asarray(h, dtype = float)
     z = np.full_like(h, -20.0)
-    y = h - np.tan(angle) * 20.0
+    y = h - np.tan(angle) * (z_stop + 20.0)
     u = 0 * h + angle
     n1 = 1.0
     for z_v, R, n2 in surfaces:
@@ -144,6 +145,7 @@ def trace(h, surfaces, angle = 0.0):
     return z, y, u
 
 
+
 def cross(h, surfaces):
     """where rays at heights h cross the optical axis after the lens (z, in mm)"""
 
@@ -151,17 +153,18 @@ def cross(h, surfaces):
     return z - y / np.tan(u)
 
 
-def best_spot(surfaces, angle = 0.0, rays = np.linspace(-10, 10, 1001)):
+def best_spot(surfaces, angle = 0.0, rays = np.linspace(-10, 10, 1001), z_stop = 0.0):
     """find the sharpest sensor position for a lens by trying 501 positions from 35 to 60 mm
 
     angle: field angle of the incoming rays (radians), 0 means straight ahead
-    rays: ray heights to trace (mm), 1001 rays from -10 to 10 unless given
+    rays: ray heights at the stop (mm), 1001 rays from -10 to 10 unless given
+    z_stop: where the aperture stop sits (mm), 0 means at the lens
     the spot is measured around the center of the rays' landing spot (np.std),
     so it works off-axis too, where the image lands away from y = 0
     returns the best sensor position (mm) and its rms spot size (mm)
     """
 
-    z_last, y, u = trace(rays, surfaces, angle)
+    z_last, y, u = trace(rays, surfaces, angle, z_stop)
     sensors = np.linspace(35, 60, 501)
     spots = []
     for z in sensors:
@@ -171,15 +174,17 @@ def best_spot(surfaces, angle = 0.0, rays = np.linspace(-10, 10, 1001)):
     best = np.argmin(spots)
     return sensors[best], spots[best]
 
-def spot_at(surfaces, z_sensor, angle = 0.0, rays = np.linspace(-10, 10, 1001)):
+
+def spot_at(surfaces, z_sensor, angle = 0.0, rays = np.linspace(-10, 10, 1001), z_stop = 0.0):
     """rms spot size (mm) of a lens at one fixed sensor position
 
     surfaces: list of (z_v, R, n_after), z_sensor: sensor position (mm)
     angle: field angle of the incoming rays (radians), 0 means straight ahead
-    rays: ray heights to trace (mm), 1001 rays from -10 to 10 unless given
+    rays: ray heights at the stop (mm), 1001 rays from -10 to 10 unless given
+    z_stop: where the aperture stop sits (mm), 0 means at the lens
     measured around the center of the rays' landing spot (np.std)
     """
 
-    z_last, y, u = trace(rays, surfaces, angle)
+    z_last, y, u = trace(rays, surfaces, angle, z_stop)
     y_sensor = y + np.tan(u) * (z_sensor - z_last)
     return np.std(y_sensor)
