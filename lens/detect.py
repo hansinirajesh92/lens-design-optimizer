@@ -38,3 +38,37 @@ def coma(surfaces, deg = 10, a = 5.0, z_stop = 0.0):
     z_last, y, u = trace(np.array([-a, 0.0, a]), surfaces, angle, z_stop)
     y_sensor = y + np.tan(u) * (z_sensor - z_last)
     return (y_sensor[0] + y_sensor[2]) / 2 - y_sensor[1]
+
+def diagnose(surfaces, a = 5.0, deg = 10, z_stop = 0.0, f = 50.0):
+    """run all three detectors on a lens, rank them by how much blur each causes, and explain the biggest
+
+    surfaces: list of (z_v, R, n_after), a: edge of the opening (mm, 5 means f/5)
+    deg: edge field angle (degrees), z_stop: aperture stop position (mm), f: focal length (mm)
+    along-axis errors become blur with: blur ≈ error × (a / f), a rough estimate for ranking
+    prints a short report and returns the name of the main problem
+    """
+
+    sa = spherical(surfaces, a)
+    fc = field_curvature(surfaces, deg, np.linspace(-a, a, 1001), z_stop)
+    cm = coma(surfaces, deg, a, z_stop)
+
+    slope = a / f
+    names = ["spherical", "field curvature", "coma"]
+    blurs = np.array([abs(sa) * slope, abs(fc) * slope, abs(cm)])
+
+    print(f"spherical:        {sa:+.3f} mm along the axis  → about {blurs[0]:.3f} mm of blur")
+    print(f"field curvature:  {fc:+.3f} mm along the axis  → about {blurs[1]:.3f} mm of blur")
+    print(f"coma:             {cm:+.4f} mm on the sensor   → about {blurs[2]:.3f} mm of blur")
+
+    main = names[np.argmax(blurs)]
+    print("main problem:", main)
+    if main == "spherical":
+        print("rays through the edge of the lens focus closer than rays through the middle, even straight ahead.")
+        print("try: a shape closer to best-form, or a smaller opening.")
+    elif main == "field curvature":
+        print("the edges of the image focus closer to the lens than the center, so a flat sensor can't catch both.")
+        print("try: moving the aperture stop, bending the lens, or a compromise sensor position.")
+    else:
+        print("off-axis dots flare out to one side like a comet.")
+        print("try: moving the aperture stop or bending the lens.")
+    return main
