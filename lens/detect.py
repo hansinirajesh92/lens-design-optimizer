@@ -1,5 +1,6 @@
 import numpy as np
 from lens.raytrace import trace, cross, best_spot
+from lens.design import recolour
 
 def spherical(surfaces, a = 5.0):
     """longitudinal spherical aberration (mm): how much earlier an edge ray crosses the axis than a near-center ray
@@ -72,3 +73,15 @@ def diagnose(surfaces, a = 5.0, deg = 10, z_stop = 0.0, f = 50.0):
         print("off-axis dots flare out to one side like a comet.")
         print("try: moving the aperture stop or bending the lens.")
     return main
+
+def chromatic(surfaces, n_blue, n_red):
+    """longitudinal chromatic aberration (mm): how far blue light focuses from red light
+
+    surfaces: list of (z_v, R, n_after), n_blue / n_red: the glass's index for blue and red light
+    uses near-axis rays (h = 0.01 mm) so spherical aberration doesn't mix in
+    negative means blue focuses closer to the lens (the usual case)
+    """
+
+    blue = recolour(surfaces, n_blue)
+    red = recolour(surfaces, n_red)
+    return cross(0.01, blue) - cross(0.01, red)
