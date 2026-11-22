@@ -11,13 +11,13 @@ designing a lens means choosing the parameters that control this: how curved and
 3. optimize: adjust the lens shape using derivatives (gradient descent), with design rules like a fixed focal length (done)
 4. tolerance: simulate thousands of slightly imperfect lenses and see how many still come out sharp (monte carlo) (done)
 5. off-axis: check the whole image, not just the center, by tracing tilted bundles of rays (done)
-6. diagnose: small detectors that measure each aberration (spherical, field curvature, coma) as one number, and a report that names the main problem (done; colour comes with step 7)
-7. source: choose from a catalog of real optical glasses, including how each one splits colours
-8. speed up: train a model that predicts sharpness without a full simulation, so many designs can be tried quickly
+6. diagnose: small detectors that measure each aberration (spherical, field curvature, coma, colour) as one number, and a report that names the main problem (done)
+7. source: choose from a catalog of real optical glasses, including how each one splits colours (done)
+8. speed up: train a model that predicts sharpness without a full simulation, so many designs can be tried quickly (done)
 
 ## status
 
-steps 1 to 6 work. the ray tracer follows light through a plano-convex lens (curved front, flat back) with exact snell's law at both surfaces. rays near the axis focus where the lensmaker's equation predicts (51.67 mm for r = 25 mm, n = 1.5, t = 5 mm), and rays near the edge focus early, which is spherical aberration coming straight out of the geometry. because of that, the sharpest sensor position isn't the textbook focus: the best focus is at 50.2 mm with an rms spot size of 0.077 mm, about 2.5x sharper than at the textbook focus (0.19 mm).
+all eight steps work. the ray tracer follows light through a plano-convex lens (curved front, flat back) with exact snell's law at both surfaces. rays near the axis focus where the lensmaker's equation predicts (51.67 mm for r = 25 mm, n = 1.5, t = 5 mm), and rays near the edge focus early, which is spherical aberration coming straight out of the geometry. because of that, the sharpest sensor position isn't the textbook focus: the best focus is at 50.2 mm with an rms spot size of 0.077 mm, about 2.5x sharper than at the textbook focus (0.19 mm).
 
 the optimizer uses gradient descent to reshape the lens. with the sensor fixed at 50 mm and the front radius starting at 30 mm, it curves the surface down to r = 24.91 mm and shrinks the rms spot from 1.04 mm to 0.077 mm (about 13x sharper). that's the floor for a plano-convex lens: one curved surface can move the focus but not remove the aberration.
 
@@ -28,6 +28,16 @@ no factory makes a lens exactly to the numbers, so step 4 checks what happens wh
 a photo isn't just its center, so step 5 checks the edges too. light from a point off to the side arrives tilted (the field angle), lands away from the middle of the sensor, and its blur is measured around where it lands. at f/2.5 the best-form lens goes from a 0.068 mm spot in the center to 0.33 mm at 10° and 0.75 mm at 15°. each angle can still focus sharply, just closer to the lens the further out it is (51.3 mm at 0°, 45.8 mm at 15°): the sharp image lies on a curved bowl while the sensor is flat (field curvature). refocusing can't fix that, because the whole photo shares one sensor. at f/5, a grid search over the lens shape and the position of the aperture stop (the opening that lets light in) finds a lens bent the other way (r1 = 100 mm, r2 = -32.7 mm) with the stop 15 mm in front of it. that makes the bowl about 3x flatter. on one flat sensor its spots stay within 0.022 to 0.038 mm from the center out to 10°, against 0.008 to 0.117 mm for the best-form lens, which cuts the average blur across the photo by 46%. it gives up some sharpness at perfect focus to get an image that's sharp everywhere. (measured in 2d; a full 3d trace would also show astigmatism, so the real gain would be smaller.)
 
 step 6 explains why a lens is blurry, not just how blurry. three detectors each measure one aberration as a single number: spherical (how much earlier an edge ray crosses the axis than a center ray), field curvature (how far the best focus moves between the center and a 10° edge) and coma (how far an off-axis dot's edge rays land off-center from its middle ray). a diagnosis report turns each into a rough amount of blur on the sensor (along-axis errors × the edge ray's slope, a / f), names the biggest, and suggests a fix. the best-form lens is held back by field curvature (about 0.26 mm of blur, 5x its spherical aberration), and the suggested fix, moving the stop and bending the lens, is exactly what flattened it in step 5. the flattened lens's main problem becomes spherical aberration instead, and following its advice (a smaller opening) cuts its worst blur from 0.14 to 0.04 mm, until field curvature leads again: fix the biggest problem, diagnose again. the detectors also show that each lens is best at what it was designed for and that no single shape wins everything.
+
+step 7 adds colour. glass bends blue light slightly more than red, so each colour focuses in a different place: for the best-form lens, blue focuses 0.78 mm closer than red, and white light comes out about 2.6x blurrier than any single colour. a fourth detector measures this (chromatic aberration), and it turns out to depend on the glass, not the shape: three very different lens shapes all land within 0.01 mm of each other. so the lens can be made from a small catalog of real glasses (from SCHOTT), each described by its index nd and its abbe number V (how little it spreads colours). making the same best-form shape in each glass shows the trade-off: colour follows V (N-FK51A has 3.3x less than N-SF11), high-index glasses cut spherical aberration by up to 40% but usually spread colour more, and no glass touches field curvature. on the flat-field lens, a high-index glass makes colour the main problem, a smaller opening doesn't fix it, and switching to the glass with the biggest V cuts colour blur 3.3x. no single glass can remove colour completely; that takes two glasses glued together.
+
+step 8 replaces the ray tracer with a machine learning model when speed matters. 1000 random lenses (front radius, thickness and stop position) were traced for real and used to train two models on 800 of them, graded on the other 200. linear regression misses by about 13% (r² 0.69), because the best designs sit in a curved valley that a straight line can't follow. a random forest misses by under 2% (r² 0.99) and predicts about 700x faster than tracing. it also says which knobs matter: the stop position (83%), then the front radius (14%), while thickness barely does (4%). searching 100,000 random designs with the model finds the same best region the grid search found in step 5 (front radius around 90 mm, stop 15 mm in front), and the ray tracer confirms them at 0.029 mm. the model narrows the search; the ray tracer always has the final word.
+
+## next
+
+- two glasses glued together (an achromatic doublet), so their colour errors cancel
+- a full 3d ray tracer, to see astigmatism and the rest of coma
+- more surfaces and knobs, where a grid search becomes impossible and the surrogate model earns its place
 
 ## running it
 
@@ -100,12 +110,25 @@ lens = [(0, 29.5, 1.5), (6, R2_for(29.5, 6, 50), 1.0)]   # best-form lens
 diagnose(lens)                                            # f/5, 10° edge: main problem is field curvature
 ```
 
+```python
+from lens.glass import catalog
+from lens.design import R2_for
+from lens.detect import diagnose
+
+glass = catalog[1]                                       # N-BK7
+n = glass["nd"]
+R1 = 29.5 * (n - 1) / 0.5                                # best-form shape in this glass
+lens = [(0, R1, n), (6, R2_for(R1, 6, 50, n), 1.0)]
+diagnose(lens, glass = glass)                            # four detectors, including colour
+```
+
 ## layout
 
 ```
-lens/raytrace.py    ray tracing (any lens as a list of surfaces, at any field angle and stop position) and spot size
+lens/raytrace.py    ray tracing (any lens as a list of surfaces, at any field angle and stop position), spot size, and blur across the whole image
 lens/optimize.py    derivatives and gradient descent
 lens/design.py      design rules, like keeping the focal length fixed
 lens/detect.py      aberration detectors and a diagnosis report
+lens/glass.py       a catalog of real optical glasses and their colour spread
 notebooks/          experiments and plots, one per step
 ```

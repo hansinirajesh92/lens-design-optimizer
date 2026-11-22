@@ -1,6 +1,7 @@
 import numpy as np
 from lens.raytrace import trace, cross, best_spot
 from lens.design import recolour
+from lens.glass import colours
 
 def spherical(surfaces, a = 5.0):
     """longitudinal spherical aberration (mm): how much earlier an edge ray crosses the axis than a near-center ray
@@ -40,11 +41,12 @@ def coma(surfaces, deg = 10, a = 5.0, z_stop = 0.0):
     y_sensor = y + np.tan(u) * (z_sensor - z_last)
     return (y_sensor[0] + y_sensor[2]) / 2 - y_sensor[1]
 
-def diagnose(surfaces, a = 5.0, deg = 10, z_stop = 0.0, f = 50.0):
-    """run all three detectors on a lens, rank them by how much blur each causes, and explain the biggest
+def diagnose(surfaces, a = 5.0, deg = 10, z_stop = 0.0, f = 50.0, glass = None):
+    """run the detectors on a lens, rank them by how much blur each causes, and explain the biggest
 
     surfaces: list of (z_v, R, n_after), a: edge of the opening (mm, 5 means f/5)
     deg: edge field angle (degrees), z_stop: aperture stop position (mm), f: focal length (mm)
+    glass: catalog dictionary (optional, adds the chromatic detector)
     along-axis errors become blur with: blur ≈ error × (a / f), a rough estimate for ranking
     prints a short report and returns the name of the main problem
     """
@@ -55,23 +57,33 @@ def diagnose(surfaces, a = 5.0, deg = 10, z_stop = 0.0, f = 50.0):
 
     slope = a / f
     names = ["spherical", "field curvature", "coma"]
-    blurs = np.array([abs(sa) * slope, abs(fc) * slope, abs(cm)])
-
+    blurs = [abs(sa) * slope, abs(fc) * slope, abs(cm)]
     print(f"spherical:        {sa:+.3f} mm along the axis  → about {blurs[0]:.3f} mm of blur")
     print(f"field curvature:  {fc:+.3f} mm along the axis  → about {blurs[1]:.3f} mm of blur")
     print(f"coma:             {cm:+.4f} mm on the sensor   → about {blurs[2]:.3f} mm of blur")
 
+    if glass is not None:
+        n_blue, n_red = colours(glass)
+        ch = chromatic(surfaces, n_blue, n_red)
+        names.append("chromatic")
+        blurs.append(abs(ch) * slope)
+        print(f"chromatic:        {ch:+.3f} mm along the axis  → about {blurs[3]:.3f} mm of blur")
+
+    blurs = np.array(blurs)
     main = names[np.argmax(blurs)]
     print("main problem:", main)
     if main == "spherical":
         print("rays through the edge of the lens focus closer than rays through the middle, even straight ahead.")
-        print("try: a shape closer to best-form, or a smaller opening.")
+        print("try: a shape closer to best-form, a smaller opening, or a glass with a higher index.")
     elif main == "field curvature":
         print("the edges of the image focus closer to the lens than the center, so a flat sensor can't catch both.")
         print("try: moving the aperture stop, bending the lens, or a compromise sensor position.")
-    else:
+    elif main == "coma":
         print("off-axis dots flare out to one side like a comet.")
         print("try: moving the aperture stop or bending the lens.")
+    else:
+        print("blue light focuses closer to the lens than red, so white light smears into coloured fringes.")
+        print("try: a glass with a bigger abbe number V (it spreads colours less).")
     return main
 
 def chromatic(surfaces, n_blue, n_red):

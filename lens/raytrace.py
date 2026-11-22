@@ -188,3 +188,42 @@ def spot_at(surfaces, z_sensor, angle = 0.0, rays = np.linspace(-10, 10, 1001), 
     z_last, y, u = trace(rays, surfaces, angle, z_stop)
     y_sensor = y + np.tan(u) * (z_sensor - z_last)
     return np.std(y_sensor)
+
+def field_loss(surfaces, z_sensor, z_stop = 0.0, rays = np.linspace(-5, 5, 1001), angles = [0, 5, 10]):
+    """how blurry the whole image is on one flat sensor: the average spot (mm) over several field angles
+
+    surfaces: list of (z_v, R, n_after), z_sensor: sensor position (mm), z_stop: aperture stop position (mm)
+    rays: ray heights at the stop (mm), f/5 unless given, angles: field angles to average (degrees)
+    """
+
+    spots = []
+    for deg in angles:
+        z_last, y, u = trace(rays, surfaces, np.radians(deg), z_stop)
+        y_sensor = y + np.tan(u) * (z_sensor - z_last)
+        spots.append(np.std(y_sensor))
+    return np.mean(spots)
+
+
+def best_field(surfaces, z_stop = 0.0, rays = np.linspace(-5, 5, 1001), angles = [0, 5, 10]):
+    """the best compromise position for a flat sensor across the whole image, by trying 241 positions from 44 to 56 mm
+
+    surfaces: list of (z_v, R, n_after), z_stop: aperture stop position (mm)
+    rays: ray heights at the stop (mm), f/5 unless given, angles: field angles to average (degrees)
+    traces each angle once, then moves the sensor along the straight rays
+    returns the best sensor position (mm) and its field loss (mm)
+    """
+
+    traced = []
+    for deg in angles:
+        traced.append(trace(rays, surfaces, np.radians(deg), z_stop))
+    sensors = np.linspace(44, 56, 241)
+    losses = []
+    for z in sensors:
+        spots = []
+        for z_last, y, u in traced:
+            y_sensor = y + np.tan(u) * (z - z_last)
+            spots.append(np.std(y_sensor))
+        losses.append(np.mean(spots))
+    losses = np.array(losses)
+    best = np.argmin(losses)
+    return sensors[best], losses[best]
